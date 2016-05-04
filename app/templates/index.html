@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+
+{% block body %}
+  <section class="header">
+    <h2 class="title">Compare Punctuations!</h2>
+    <p>Features:</p>
+    <ul>
+      <li>Select the texts to compare</li>
+      <li>Choose between punctuation and color legend</li>
+      <li>Hover over the legend to <strong>highlight</strong> the location of punctuation</li>
+      <li>Generate Link to share with others</li>
+    </ul>
+
+  </section>
+  <hr />
+  <div class="row">
+    <div class="one-half column">
+      <select class="u-full-width js-viz-select" id="js-select-viz-a" data-vizId="viz-a">
+        {% for item in text_choices %}
+            <option value={{item.key}}>{{item.title}} - {{item.author}}</option>
+        {% endfor %}
+      </select>
+      <div id="viz-a"></div>
+    </div>
+    <div class="one-half column">
+      <select class="u-full-width js-viz-select" id="js-select-viz-b" data-vizId="viz-b">
+        {% for item in text_choices %}
+          <option value={{item.key}}>{{item.title}} - {{item.author}}</option>
+        {% endfor %}
+      </select>
+      <div id="viz-b"></div>
+    </div>
+  </div>
+  <br />
+  <div class="row">
+    <fieldset>
+      <label for="">Select display mode</label>
+      <div class="row">
+        <div class="one column">
+          <input type="radio" name="legend" id="js-radio-symbol" value="symbol" />
+        </div>
+        <div class="eleven columns legend" id="viz-legend-symbol"></div>
+      </div>
+      <div class="row">
+        <div class="one column">
+          <input type="radio" name="legend" id="js-radio-color" value="color" />
+        </div>
+        <div class="eleven columns legend">
+          <div id="viz-legend-color"></div>
+        </div>
+      </div>
+    </fieldset>
+  </div>
+  <div class="row">
+    <div class="twelve columns">
+      <input class="button-primary" type="button" id="js-gen-share" value="Generate Share Link">
+      <span id="js-share-link"><a href=""></a></span>
+    </div>
+  </div>
+{% endblock body %}
+
+{% block js %}
+  <script type="text/javascript" src={{url_for("static", filename="js/grid.js")}}></script>
+
+  <script type="text/javascript">
+    var textData = {{ text_data | safe }};
+    var symbols = {{ symbols | safe }};
+
+
+    var getParam = function(paramKey) {
+      var paramValue = location.search.split(paramKey + '=')[1];
+      if (paramValue) {
+        paramValue = paramValue.split("&")[0];
+      }
+      return paramValue;
+    }
+
+    $(document).ready(function() {
+
+      var dispatch = d3.dispatch("load", "select", "clearSelect", "showText", "showColor");
+      var colorScale = genrateColorScale();
+
+      var paramValue = getParam('viz-a');
+      var vizKeyA = paramValue ? paramValue : textData[0].key;
+      console.log(vizKeyA);
+
+      var paramValue = getParam('viz-b');
+      var vizKeyB = paramValue ? paramValue : textData[0].key;
+      console.log(vizKeyB);
+
+      var paramValue = getParam('legend');
+      var legendSelected = paramValue ? paramValue : "color";
+      console.log(legendSelected);
+
+      var drawGrid = function(dataKey, domId) {
+        var width = $("#" + domId).width();
+        var width = width > 460 ? 460 : width;
+        var showText = $('#js-radio-symbol').is(':checked');
+        var showColor = $('#js-radio-color').is(':checked');
+        console.log(showColor);
+        var options = {
+          rows: 25,
+          cols: 25,
+          width: width,
+          height: width, // Square Layout
+          colorScale: colorScale,
+          dispatch: dispatch,
+          symbols: symbols,
+          showText: showText,
+          showColor: showColor
+        }
+        var selectedData = textData.filter(function(d) {
+          return d.key === dataKey;
+        });
+        if (selectedData.length > 0) {
+          renderGrid(selectedData[0].punctuations, domId, options);
+        }
+      };
+
+      var drawLegend = function() {
+        var options = {
+          rows: 1,
+          cols: symbols.length,
+          width: $("#viz-legend-symbol").width(),
+          height: 30, // TODO: Change to device width
+          colorScale: colorScale,
+          dispatch: dispatch,
+          showText: true,
+          showColor: false
+        }
+        renderGridLegend(symbols, "viz-legend-symbol", options);
+        options.showText = false;
+        options.showColor = true;
+        renderGridLegend(symbols, "viz-legend-color", options);
+      };
+      drawLegend();
+
+      var resetShareLink = function() {
+        $('#js-share-link a')
+          .attr("href", "")
+          .text("");
+      }
+
+      $('select.js-viz-select').change(function() {
+        resetShareLink();
+        var vizId = $(this).attr("data-vizId");
+        var textKey = $(this).find('option:selected').attr("value");
+        console.log(textKey, vizId);
+        drawGrid(textKey, vizId);
+      });
+
+      $('input[type=radio][name=legend]').change(function() {
+        resetShareLink();
+        if (this.value == 'symbol') {
+            dispatch.showText();
+        }
+        else if (this.value == 'color') {
+            dispatch.showColor();
+        }
+      });
+
+      $('input[type=radio][name=legend]').attr('checked', false);
+      $('input[type=radio][name=legend]')
+        .filter('[value="' + legendSelected + '"]').attr('checked', true);
+
+      $('#js-select-viz-a').val(vizKeyA).change();
+      $('#js-select-viz-b').val(vizKeyB).change();
+
+      $('#js-gen-share').click(function(e) {
+        e.preventDefault();
+        var shareLink = window.location.href.split("?")[0] + "?";
+        // Add Legend
+        if ($('#js-radio-symbol').is(':checked')) {
+          shareLink += "legend=symbol&";
+        } else {
+          shareLink += "legend=color&";
+        }
+        // VizA & VizB
+        shareLink += "viz-a=" + $("#js-select-viz-a").val() + "&";
+        shareLink += "viz-b=" + $("#js-select-viz-b").val() + "&";
+        $('#js-share-link a')
+          .attr("href", shareLink)
+          .text(shareLink);
+      })
+    });
+  </script>
+{% endblock js %}
